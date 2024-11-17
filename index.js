@@ -1,6 +1,7 @@
 const http = require('http');
-const fs = require('fs').promises; // Модуль fs для роботи з файлами
+const fs = require('fs').promises;
 const { Command } = require('commander');
+const superagent = require('superagent'); // Підключаємо superagent для запитів
 
 const program = new Command();
 
@@ -12,7 +13,6 @@ program
 program.parse(process.argv);
 const options = program.opts();
 
-// Функція для створення кешу, якщо його ще немає
 async function ensureCacheDir(cachePath) {
   try {
     await fs.mkdir(cachePath, { recursive: true });
@@ -21,54 +21,40 @@ async function ensureCacheDir(cachePath) {
   }
 }
 
-// HTTP сервер
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
 
-  // Витягуємо код із URL
-  const httpCode = url.slice(1); // Наприклад: '/200' -> '200'
+  const httpCode = url.slice(1); // Витягуємо код HTTP зі шляху URL
   const filePath = `${options.cache}/${httpCode}.jpg`;
 
   try {
     switch (method) {
       case 'GET': // Отримати картинку
         try {
+          // Перевіряємо, чи є файл у кеші
           const data = await fs.readFile(filePath);
           res.writeHead(200, { 'Content-Type': 'image/jpeg' });
           res.end(data);
         } catch {
-          res.writeHead(404, { 'Content-Type': 'text/plain' });
-          res.end('Not Found');
-        }
-        break;
-
-      case 'PUT': // Записати картинку
-        let body = [];
-        req.on('data', chunk => body.push(chunk));
-        req.on('end', async () => {
+          // Якщо файлу немає, завантажуємо з https://http.cat
           try {
-            await fs.writeFile(filePath, Buffer.concat(body));
-            res.writeHead(201, { 'Content-Type': 'text/plain' });
-            res.end('Created');
-          } catch (error) {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Internal Server Error');
-          }
-        });
-        break;
+            const response = await superagent.get(`https://http.cat/${httpCode}`);
+            const imageData = response.body;
 
-      case 'DELETE': // Видалити картинку
-        try {
-          await fs.unlink(filePath);
-          res.writeHead(200, { 'Content-Type': 'text/plain' });
-          res.end('Deleted');
-        } catch {
-          res.writeHead(404, { 'Content-Type': 'text/plain' });
-          res.end('Not Found');
+            // Зберігаємо картинку в кеші
+            await fs.writeFile(filePath, imageData);
+
+            res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+            res.end(imageData);
+          } catch (error) {
+            // Якщо запит до http.cat невдалий
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Not Found');
+          }
         }
         break;
 
-      default: // Метод не дозволено
+      default:
         res.writeHead(405, { 'Content-Type': 'text/plain' });
         res.end('Method Not Allowed');
         break;
@@ -79,7 +65,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// Старт сервера
 ensureCacheDir(options.cache).then(() => {
   server.listen(options.port, options.host, () => {
     console.log(`Server running at http://${options.host}:${options.port}/`);
