@@ -49,7 +49,7 @@ const server = http.createServer(async (req, res) => {
           } catch (error) {
             // Якщо запит до http.cat невдалий
             res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('Not Found');
+            res.end(' 404 Not Found');
           }
         }
         break;
