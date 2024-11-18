@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs').promises; // Модуль fs для роботи з файлами
 const { Command } = require('commander');
+const superagent = require('superagent');
 
 const program = new Command();
 
@@ -36,10 +37,23 @@ const server = http.createServer(async (req, res) => {
           const data = await fs.readFile(filePath);
           res.writeHead(200, { 'Content-Type': 'image/jpeg' });
           res.end(data);
-        } catch {
+        } 
+        catch {
+            // Якщо файлу немає, завантажуємо з https://http.cat
+            try {
+              const response = await superagent.get(`https://http.cat/${httpCode}`);
+              const imageData = response.body;
+  
+              // Зберігаємо картинку в кеші
+              await fs.writeFile(filePath, imageData);
+  
+              res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+              res.end(imageData);}
+        catch {
           res.writeHead(404, { 'Content-Type': 'text/plain' });
           res.end('Not Found');
         }
+    }
         break;
 
       case 'PUT': // Записати картинку
